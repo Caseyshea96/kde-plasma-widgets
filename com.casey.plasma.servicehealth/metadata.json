@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Casey"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "At-a-glance status for key systemd services",
+        "Icon": "preferences-system-services",
+        "Id": "com.casey.plasma.servicehealth",
+        "License": "MIT",
+        "Name": "Service Health",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Version": "0.1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
