@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Casey"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "View and control local Docker containers from Plasma",
+        "Icon": "system-run",
+        "Id": "com.casey.plasma.docker",
+        "License": "MIT",
+        "Name": "Docker Containers",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Version": "0.3.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

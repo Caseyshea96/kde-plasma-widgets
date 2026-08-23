@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Casey"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Tailnet peer status, exit node, and advertised subnet routes",
+        "Icon": "network-vpn",
+        "Id": "com.casey.plasma.tailscale",
+        "License": "MIT",
+        "Name": "Tailscale Status",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Version": "0.1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
