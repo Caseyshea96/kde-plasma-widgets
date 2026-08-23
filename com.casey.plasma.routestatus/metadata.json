@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Casey"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Default route, IP forwarding state, and routes via tailscale0",
+        "Icon": "preferences-system-network",
+        "Id": "com.casey.plasma.routestatus",
+        "License": "MIT",
+        "Name": "Route Status",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Version": "0.1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
