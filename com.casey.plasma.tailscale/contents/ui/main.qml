@@ -169,10 +169,20 @@ PlasmoidItem {
     }
 
     Timer {
+        id: periodicRefresh
         interval: Math.max(2, Plasmoid.configuration.refreshInterval) * 1000
-        running: true
+        running: false
         repeat: true
         onTriggered: root.refresh()
+    }
+
+    // Stagger this widget's periodic refresh against every other widget/instance so
+    // several widgets added around the same time don't poll in lockstep forever.
+    Timer {
+        interval: Math.floor(Math.random() * periodicRefresh.interval)
+        running: true
+        repeat: false
+        onTriggered: periodicRefresh.start()
     }
 
     Component.onCompleted: refresh()
@@ -228,37 +238,16 @@ PlasmoidItem {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 16
         Layout.minimumHeight: Kirigami.Units.gridUnit * 12
 
-        Ksvg.FrameSvgItem {
-            id: widgetBackground
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 0
-            imagePath: "widgets/background"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 1
-            radius: Kirigami.Units.smallSpacing * 3
-            color: Kirigami.Theme.backgroundColor
-            opacity: Math.max(10, Math.min(95, Plasmoid.configuration.backgroundOpacity)) / 100
+        CardBackground {
+            id: cardBackground
         }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.left)
-                : Kirigami.Units.largeSpacing
-            anchors.rightMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.right)
-                : Kirigami.Units.largeSpacing
-            anchors.topMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.top)
-                : Kirigami.Units.largeSpacing
-            anchors.bottomMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.bottom)
-                : Kirigami.Units.largeSpacing
+            anchors.leftMargin: cardBackground.marginLeft
+            anchors.rightMargin: cardBackground.marginRight
+            anchors.topMargin: cardBackground.marginTop
+            anchors.bottomMargin: cardBackground.marginBottom
             spacing: Kirigami.Units.smallSpacing
 
             RowLayout {
