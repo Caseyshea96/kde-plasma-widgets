@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-widget_id="com.casey.plasma.routestatus"
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+widget_id="$(basename -- "$project_dir")"
+if command -v python3 >/dev/null 2>&1; then
+    widget_name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["KPlugin"]["Name"])' "$project_dir/metadata.json" 2>/dev/null || true)"
+fi
+[ -n "${widget_name:-}" ] || widget_name="$widget_id"
 
 if command -v kpackagetool6 >/dev/null 2>&1; then
     package_tool="kpackagetool6"
@@ -25,8 +29,8 @@ if [ -n "$installed_path" ] && [ "$installed_path" = "$project_dir" ]; then
     echo "Already installed in place. Restart the widget (or plasmashell) to pick up changes."
 elif [ -n "$installed_path" ]; then
     "$package_tool" --type Plasma/Applet --upgrade "$project_dir"
-    echo "Installed Route Status. Add it from Plasma's widget picker."
+    echo "Installed $widget_name. Add it from Plasma's widget picker."
 else
     "$package_tool" --type Plasma/Applet --install "$project_dir"
-    echo "Installed Route Status. Add it from Plasma's widget picker."
+    echo "Installed $widget_name. Add it from Plasma's widget picker."
 fi

@@ -11,6 +11,7 @@ PlasmoidItem {
     id: root
 
     readonly property string sectionMarker: "===SECTION==="
+    readonly property string exitMarker: "===EXIT:"
 
     property var defaultRoutes: []
     property var tailscaleRoutes: []
@@ -44,25 +45,57 @@ PlasmoidItem {
             : i18n("Command failed (exit %1)", exitCode)
     }
 
+    function parseSection(text) {
+        var idx = text.lastIndexOf(root.exitMarker)
+        if (idx === -1) return { exitCode: -1, content: text.trim() }
+        return {
+            exitCode: Number(text.substring(idx + root.exitMarker.length).trim()),
+            content: text.substring(0, idx).trim()
+        }
+    }
+
     function parseOutput(output) {
         var parts = output.split(root.sectionMarker)
         if (parts.length !== 4) {
             return { ok: false, error: i18n("Unexpected command output") }
         }
+
+        var defaultSection = root.parseSection(parts[0])
+        var tailscaleSection = root.parseSection(parts[1])
+        var ipv4Section = root.parseSection(parts[2])
+        var ipv6Section = root.parseSection(parts[3])
+
+        // The default route is the one piece of data we treat as load-bearing: if it
+        // fails, something is fundamentally wrong (e.g. `ip` missing), so surface it.
+        if (defaultSection.exitCode !== 0) {
+            return { ok: false, error: i18n("Could not determine default route (exit %1)", defaultSection.exitCode) }
+        }
+
+        var defaultRoutesParsed
         try {
-            var defaultRoutesParsed = JSON.parse(parts[0].trim() || "[]")
-            var tailscaleRoutesParsed = JSON.parse(parts[1].trim() || "[]")
-            var ipv4 = parts[2].trim() === "1"
-            var ipv6 = parts[3].trim() === "1"
-            return {
-                ok: true,
-                defaultRoutes: defaultRoutesParsed,
-                tailscaleRoutes: tailscaleRoutesParsed,
-                ipv4Forwarding: ipv4,
-                ipv6Forwarding: ipv6
-            }
+            defaultRoutesParsed = JSON.parse(defaultSection.content || "[]")
         } catch (error) {
             return { ok: false, error: i18n("Could not parse route output: %1", error) }
+        }
+
+        // The tailscale0 route and the /proc forwarding reads are each independent and
+        // best-effort: a missing interface or an unsupported IPv6 stack is a normal
+        // state, not an error, so a non-zero exit there just means "nothing to report".
+        var tailscaleRoutesParsed = []
+        if (tailscaleSection.exitCode === 0) {
+            try {
+                tailscaleRoutesParsed = JSON.parse(tailscaleSection.content || "[]")
+            } catch (error) {
+                tailscaleRoutesParsed = []
+            }
+        }
+
+        return {
+            ok: true,
+            defaultRoutes: defaultRoutesParsed,
+            tailscaleRoutes: tailscaleRoutesParsed,
+            ipv4Forwarding: ipv4Section.exitCode === 0 && ipv4Section.content === "1",
+            ipv6Forwarding: ipv6Section.exitCode === 0 && ipv6Section.content === "1"
         }
     }
 
@@ -73,10 +106,15 @@ PlasmoidItem {
         }
         refreshBusy = true
         refreshError = ""
-        var cmd = "ip -j route show default; echo '" + sectionMarker + "'; "
-            + "ip -j route show dev tailscale0; echo '" + sectionMarker + "'; "
-            + "cat /proc/sys/net/ipv4/ip_forward; echo '" + sectionMarker + "'; "
-            + "cat /proc/sys/net/ipv6/conf/all/forwarding"
+        var commands = [
+            "ip -j route show default",
+            "ip -j route show dev tailscale0",
+            "cat /proc/sys/net/ipv4/ip_forward",
+            "cat /proc/sys/net/ipv6/conf/all/forwarding"
+        ]
+        var cmd = commands.map(function(command) {
+            return command + "; echo \"" + root.exitMarker + "$?\""
+        }).join("; echo '" + root.sectionMarker + "'; ")
         routeCommand.connectSource(cmd)
     }
 
@@ -123,10 +161,20 @@ PlasmoidItem {
     }
 
     Timer {
+        id: periodicRefresh
         interval: Math.max(2, Plasmoid.configuration.refreshInterval) * 1000
-        running: true
+        running: false
         repeat: true
         onTriggered: root.refresh()
+    }
+
+    // Stagger this widget's periodic refresh against every other widget/instance so
+    // several widgets added around the same time don't poll in lockstep forever.
+    Timer {
+        interval: Math.floor(Math.random() * periodicRefresh.interval)
+        running: true
+        repeat: false
+        onTriggered: periodicRefresh.start()
     }
 
     Component.onCompleted: refresh()
@@ -182,37 +230,16 @@ PlasmoidItem {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 16
         Layout.minimumHeight: Kirigami.Units.gridUnit * 10
 
-        Ksvg.FrameSvgItem {
-            id: widgetBackground
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 0
-            imagePath: "widgets/background"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 1
-            radius: Kirigami.Units.smallSpacing * 3
-            color: Kirigami.Theme.backgroundColor
-            opacity: Math.max(10, Math.min(95, Plasmoid.configuration.backgroundOpacity)) / 100
+        CardBackground {
+            id: cardBackground
         }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.left)
-                : Kirigami.Units.largeSpacing
-            anchors.rightMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.right)
-                : Kirigami.Units.largeSpacing
-            anchors.topMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.top)
-                : Kirigami.Units.largeSpacing
-            anchors.bottomMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.bottom)
-                : Kirigami.Units.largeSpacing
+            anchors.leftMargin: cardBackground.marginLeft
+            anchors.rightMargin: cardBackground.marginRight
+            anchors.topMargin: cardBackground.marginTop
+            anchors.bottomMargin: cardBackground.marginBottom
             spacing: Kirigami.Units.smallSpacing
 
             RowLayout {
@@ -291,7 +318,7 @@ PlasmoidItem {
                     }
 
                     StatusChip {
-                        iconName: "network-wired"
+                        iconName: "emblem-shared"
                         label: root.ipv6Forwarding ? i18n("IPv6 forwarding: on") : i18n("IPv6 forwarding: off")
                         tint: root.ipv6Forwarding ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.disabledTextColor
                     }

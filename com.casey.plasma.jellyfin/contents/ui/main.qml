@@ -19,7 +19,7 @@ PlasmoidItem {
 
     readonly property string trimmedServerUrl: (Plasmoid.configuration.serverUrl || "").trim().replace(/\/+$/, "")
     readonly property string trimmedApiKey: (Plasmoid.configuration.apiKey || "").trim()
-    readonly property bool validServerUrl: /^https?:\/\/[A-Za-z0-9_.-]+(:[0-9]{1,5})?$/.test(trimmedServerUrl)
+    readonly property bool validServerUrl: /^https?:\/\/[A-Za-z0-9_.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9_.\-\/]*)?$/i.test(trimmedServerUrl)
     readonly property bool validApiKey: /^[A-Za-z0-9]{16,64}$/.test(trimmedApiKey)
     readonly property bool configured: validServerUrl && validApiKey
     readonly property bool showingStaleData: refreshError.length > 0 && haveData
@@ -99,8 +99,15 @@ PlasmoidItem {
         }
         refreshBusy = true
         refreshError = ""
-        var cmd = "curl -sS -f -m 5 -H 'X-Emby-Token: " + trimmedApiKey + "' '"
-            + trimmedServerUrl + "/Sessions?ActiveWithinSeconds=960'"
+        // The API key is delivered to curl via a stdin config file (-K -) rather than
+        // as a literal -H argument, so it never appears in curl's own argv/cmdline,
+        // where any other local user could read it via `ps aux` for the duration of
+        // the request. validApiKey already restricts the key to [A-Za-z0-9], so no
+        // escaping is needed before embedding it in the heredoc body.
+        var cmd = "curl -sS -f -m 5 -K - '"
+            + trimmedServerUrl + "/Sessions?ActiveWithinSeconds=960' <<'JELLYFIN_EOF'\n"
+            + "header = \"X-Emby-Token: " + trimmedApiKey + "\"\n"
+            + "JELLYFIN_EOF"
         sessionsCommand.connectSource(cmd)
     }
 
@@ -144,10 +151,20 @@ PlasmoidItem {
     }
 
     Timer {
+        id: periodicRefresh
         interval: Math.max(5, Plasmoid.configuration.refreshInterval) * 1000
-        running: true
+        running: false
         repeat: true
         onTriggered: root.refresh()
+    }
+
+    // Stagger this widget's periodic refresh against every other widget/instance so
+    // several widgets added around the same time don't poll in lockstep forever.
+    Timer {
+        interval: Math.floor(Math.random() * periodicRefresh.interval)
+        running: true
+        repeat: false
+        onTriggered: periodicRefresh.start()
     }
 
     Component.onCompleted: refresh()
@@ -203,37 +220,16 @@ PlasmoidItem {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 16
         Layout.minimumHeight: Kirigami.Units.gridUnit * 10
 
-        Ksvg.FrameSvgItem {
-            id: widgetBackground
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 0
-            imagePath: "widgets/background"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            z: -1
-            visible: Plasmoid.configuration.backgroundStyle === 1
-            radius: Kirigami.Units.smallSpacing * 3
-            color: Kirigami.Theme.backgroundColor
-            opacity: Math.max(10, Math.min(95, Plasmoid.configuration.backgroundOpacity)) / 100
+        CardBackground {
+            id: cardBackground
         }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.left)
-                : Kirigami.Units.largeSpacing
-            anchors.rightMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.right)
-                : Kirigami.Units.largeSpacing
-            anchors.topMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.top)
-                : Kirigami.Units.largeSpacing
-            anchors.bottomMargin: Plasmoid.configuration.backgroundStyle === 0
-                ? Math.max(Kirigami.Units.largeSpacing, widgetBackground.margins.bottom)
-                : Kirigami.Units.largeSpacing
+            anchors.leftMargin: cardBackground.marginLeft
+            anchors.rightMargin: cardBackground.marginRight
+            anchors.topMargin: cardBackground.marginTop
+            anchors.bottomMargin: cardBackground.marginBottom
             spacing: Kirigami.Units.smallSpacing
 
             RowLayout {
@@ -354,6 +350,7 @@ PlasmoidItem {
 
                                     PlasmaComponents3.Label {
                                         text: root.sessionTitle(modelData)
+                                        textFormat: Text.PlainText
                                         font.bold: true
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -371,6 +368,7 @@ PlasmoidItem {
                                         + (modelData.DeviceName || modelData.Client || "") + " · "
                                         + root.formatDuration(root.ticksToSeconds(modelData.PlayState ? modelData.PlayState.PositionTicks : 0))
                                         + " / " + root.formatDuration(root.ticksToSeconds(modelData.NowPlayingItem ? modelData.NowPlayingItem.RunTimeTicks : 0))
+                                    textFormat: Text.PlainText
                                     opacity: 0.7
                                     elide: Text.ElideRight
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
